@@ -1,10 +1,11 @@
 import std.stdio;
 import std.algorithm;
 import std.regex;
+import std.conv;
 
 void main(string[] args) {
    if (args.length > 1) {
-      string  poFile = args[1];
+      string poFile = args[1];
       convert(poFile);
    } else {
       writeln("invalid filename");
@@ -15,32 +16,38 @@ void main(string[] args) {
 void convert(string poFile) {
    enum state {
       waitID,
-      waitStr
+      startStr,
+      continueStr
    }
 
    state st = state.waitID;
    auto file = File(poFile);
+   string text;
    foreach (line; file.byLine()) {
-      switch (st) {
-         case state.waitID:
-            if (line.startsWith("msgid")) {
-               auto idReg = regex(`^msgid\s*"([^"]+)"`);
-               auto m = match(line, idReg);
+      final switch (st) with (state) {
+         case waitID:
+            auto msgidRegExp = regex(`^msgid\s*"([^"]+)"`);
+            auto m = match(line, msgidRegExp);
+            if (!m.empty) {
                writef(`"%s"`, m.captures[1]);
-               //write("1: ", m.captures[1]);
-               st = state.waitStr;
+               st = startStr;
             }
             break;
-         case state.waitStr:
-            if (line.startsWith("msgstr")) {
-               auto idS = regex(`^msgstr\s*"([^"]+)"`);
-               auto m = match(line, idS);
-               writefln(`="%s"`, m.captures[1]);
+         case startStr:
+            auto msgstrRegExp = regex(`^msgstr\s*"([^"]+)"`);
+            auto m = matchFirst(line, msgstrRegExp);
+            text = m[1].to!string();
+            st = state.continueStr;
+            break;
+         case continueStr:
+            auto strRegExp = regex(`^\s*"([^"]+)"`);
+            auto m = matchFirst(line, strRegExp);
+            if (!m.empty) {
+               text ~= m[1].to!string();
+            } else {
+               writefln(`="%s"`, text);
                st = state.waitID;
             }
-            break;
-         default:
-            assert(false);
       }
    }
 }
